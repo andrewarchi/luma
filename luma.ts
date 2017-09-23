@@ -1,3 +1,12 @@
+/*
+ * HTML 5.1   https://www.w3.org/TR/2016/REC-html51-20161101/infrastructure.html#colors
+ * HTML 4.01  https://www.w3.org/TR/1999/REC-html401-19991224/types.html#h-6.5
+ * HTML 3.2   https://www.w3.org/TR/REC-html32#colors
+ * CSS 1      https://www.w3.org/TR/2008/REC-CSS1-20080411/#color-units
+ * CSS 2.2    https://www.w3.org/TR/2016/WD-CSS22-20160412/syndata.html#color-units
+ * CSS 3      https://www.w3.org/TR/2011/REC-css3-color-20110607/
+ */
+
 // Summary of the different standards
 // http://webcolors.readthedocs.io/en/1.5/colors.html
 
@@ -21,7 +30,12 @@ namespace Luma {
       return this.toRgbaString();
     }
 
-    toHexString(): string {
+    // Ignores alpha channel
+    // https://www.w3.org/TR/2016/REC-html51-20161101/infrastructure.html#rules-for-serializing-simple-color-values
+    toHexString(useShort: boolean = true): string {
+      if (useShort && this.r < 16 && this.g < 16 && this.b < 16) {
+        return '#' + this.r.toString(16) + this.g.toString(16) + this.b.toString(16);
+      }
       return '#'
         + ('0' + this.r.toString(16)).slice(-2)
         + ('0' + this.g.toString(16)).slice(-2)
@@ -38,7 +52,7 @@ namespace Luma {
     }
 
     toRgbaString(): string {
-      return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
+      return toFuncString('rgba', this.r, this.g, this.b, this.a);
     }
   }
 
@@ -46,25 +60,8 @@ namespace Luma {
     r, g, b, a: number;
   }
 
-  function clamp(num: number, min: number, max: number): number {
-    return Math.min(Math.max(num, min), max);
-  }
-  function clamp01(num: number): number {
-    return clamp(num, 0, 1);
-  }
-  function clampFF(num: number): number {
-    return clamp(Math.round(num), 0, 255);
-  }
-
-  function bound01(num: number, max: number): number {
-    return clamp(num, 0, max) / max;
-  }
-
-  function mod(dividend: number, divisor: number): number {
-    return ((dividend % divisor) + divisor) % divisor;
-  }
-
   // Simple color
+  // https://www.w3.org/TR/2016/REC-html51-20161101/infrastructure.html#rules-for-parsing-simple-color-values
   export function hex6(input: string): Color {
     let matches = matchers.hex6.exec(input);
     if (!matches) {
@@ -177,22 +174,23 @@ namespace Luma {
     return hsl(h, s2 * 100, l2 * 100, a);
   }
 
-  // https://www.w3.org/TR/2011/WD-html5-20110525/common-microsyntaxes.html#rules-for-parsing-a-legacy-color-value
+  // Legacy color value
+  // https://www.w3.org/TR/2016/REC-html51-20161101/infrastructure.html#rules-for-parsing-a-legacy-color-value
   export function legacy(input: string): Color { // 1
     if (input === '') { // 2
       return null; // error
     }
-    input = input.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, ''); // 3
+    input = matchers.trim(input); // 3
     let lower = input.toLowerCase();
     if (lower === 'transparent') { // 4
       return null; // error
     }
     if (colorKeywords.svg.hasOwnProperty(lower)) { // 5
-      return Luma.hex6(colorKeywords.svg[lower]);
+      return hex6(colorKeywords.svg[lower]);
     }
-    let hex3 = Luma.hex3(input); // 6
-    if (hex3 !== null) {
-      return hex3;
+    let hex = hex3(input); // 6
+    if (hex !== null) {
+      return hex;
     }
     input = input.replace(/[^\x00-\uFFFF]/g, '00'); // 7
     input = input.slice(0, 128); // 8
@@ -223,31 +221,112 @@ namespace Luma {
       parseInt(components[1], 16), // 18
       parseInt(components[2], 16) // 19
     ); // 20
-  
-    function _inferFormat(input: string): string {
-      if (matchers.hex3.test(input)) { return 'hex3'; }
-      if (matchers.hex6.test(input)) { return 'hex6'; }
-      let matches = matchers.func.exec(input);
-      if (matches) { return matches[1].toLowerCase(); }
-      return null;
+  }
+
+  // HTML 3.2-4.01
+  // hex6, Windows VGA palette
+  export function html4(input: string): Color {
+    var lower = input.toLowerCase();
+    if (colorKeywords.html.hasOwnProperty(lower)) {
+      input = colorKeywords.html[lower];
     }
+    return hex6(input);
+  }
+
+  // CSS 1
+  // hex3, hex6, rgb, rgb%, Windows VGA palette
+  export function css1(input: string): Color {
+    let lower = input.toLowerCase();
+    if (colorKeywords.html.hasOwnProperty(lower)) {
+      input = colorKeywords.html[lower];
+    }
+    return hex6(input) || hex3(input)
+      || rgb(input); // NOTE: this includes rgba, but shouldn't
+  }
+
+  // CSS 2.1
+  // hex3, hex6, rgb, rgb%, Windows VGA palette, orange, system colors
+  // Orange added in CSS 2.1
+  // System colors are not supported because they are platform dependant
+  export function css2(input: string): Color {
+    if (input.toLowerCase() === 'orange') {
+      return hex6('#ffa500');
+    }
+    if (isSystem(input)) {
+      return null; // No defined rgb
+    }
+    return css1(input);
+  }
+
+  // CSS 3
+  // hex3, hex6, rgb(a), rgb(a)%, hsl(a), extended color keywords, currentColor, system colors
+  export function css3(input: string): Color {
+    return // hex6(input) || hex3(input) || rgb(input);
+  }
+
+  // Checks if string is a CSS 2 system color
+  export function isSystem(input: string): boolean {
+    return colorKeywords.system.indexOf(input.toLowerCase()) !== -1;
+  }
+
+  // CSS 3
+  // Checks if string is the 'currentColor' keyword
+  export function isCurrentColor(input: string): boolean {
+    return input.toLowerCase() === 'currentcolor';
   }
 
   namespace matchers {
     let cssInteger = `[-\\+]?\\d+`; // http://www.w3.org/TR/css3-values/#integers
     let cssNumber = `[-\\+]?\\d*\\.\\d+(?:[eE]${cssInteger})?`; // http://www.w3.org/TR/css3-values/#number-value
     let cssUnit = `(?:${cssInteger})|(?:${cssNumber})%?`;
-    let spacedUnit = `\\s*(${cssUnit})\\s*`;
+    // https://www.w3.org/TR/2016/WD-CSS22-20160412/syndata.html#whitespace
+    // https://www.w3.org/TR/2016/REC-html51-20161101/infrastructure.html#space-characters
+    let ws = `[ \\t\\n\\f\\r]`;
+    let spacedUnit = `${ws}*(${cssUnit})${ws}*`;
     let group3 = `\\(${spacedUnit},${spacedUnit},${spacedUnit}\\)`;
     let group4 = `\\(${spacedUnit},${spacedUnit},${spacedUnit},${spacedUnit}\\)`;
     let genericFunc = `([a-z]+)\\((?:${spacedUnit},)*${spacedUnit}\\)`;
     export var hex3 = /^#([\dA-F])([\dA-F])([\dA-F])$/i;
     export var hex6 = /^#([\dA-F]{2})([\dA-F]{2})([\dA-F]{2})$/i;
+    // export var hex3Long = /^#([\dA-F])\1([\dA-F])\2([\dA-F])\3$/i;
     export var rgb = new RegExp('rgb' + group3, 'i');
     export var rgba = new RegExp('rgba' + group4, 'i');
     export var hsl = new RegExp('hsl' + group3, 'i');
     export var hsla = new RegExp('hsla' + group4, 'i');
     export var func = new RegExp(genericFunc, 'i');
+    export function trim(input: string): string {
+      return input.replace(new RegExp(`^${ws}+|${ws}+$`, 'g'), '');
+    }
+  }
+
+  function inferFormat(input: string): string {
+    if (matchers.hex3.test(input)) { return 'hex3'; }
+    if (matchers.hex6.test(input)) { return 'hex6'; }
+    let matches = matchers.func.exec(input);
+    if (matches) { return matches[1].toLowerCase(); }
+    return null;
+  }
+
+  function clamp(num: number, min: number, max: number): number {
+    return Math.min(Math.max(num, min), max);
+  }
+  function clamp01(num: number): number {
+    return clamp(num, 0, 1);
+  }
+  function clampFF(num: number): number {
+    return clamp(Math.round(num), 0, 255);
+  }
+
+  function bound01(num: number, max: number): number {
+    return clamp(num, 0, max) / max;
+  }
+
+  function mod(dividend: number, divisor: number): number {
+    return ((dividend % divisor) + divisor) % divisor;
+  }
+
+  function toFuncString(func: string, ...args: number[]): string {
+    return `${func}(${args.join(', ')})`;
   }
 }
 
@@ -403,7 +482,10 @@ namespace colorKeywords {
     yellowgreen: '#9acd32'
   };
 
-  export var html4 = {
+  // Windows VGA palette
+  // HTML 3.2-4.01
+  // CSS 1
+  export var html = {
     aqua:    '#00ffff',
     black:   '#000000',
     blue:    '#0000ff',
@@ -453,7 +535,7 @@ namespace colorKeywords {
     'Window',
     'WindowFrame',
     'WindowText'
-  ];
+  ].map(c => c.toLowerCase());
 }
 
 // Handles percentages, exponents, and clamps number to range
@@ -465,65 +547,10 @@ function _cssNumber(input: string, min: number, max: number): number {
   return Math.min(Math.max(parseFloat(input), min), max);
 }
 
-
-function _parseSRgbMethods(input: string): Luma.Color {
-  let hex6 = Luma.hex6(input);
-  if (hex6 !== null) {
-    return hex6;
-  }
-  let hex3 = Luma.hex3(input);
-  if (hex3 !== null) {
-    return hex3;
-  }
-  let rgb = Luma.rgb(input);
-  if (rgb !== null) {
-    return rgb
-  }
-  return null;
-}
-
-// HTML4
-// https://www.w3.org/TR/html401/types.html#h-6.5
-function html4(input: string): Luma.Color {
-  var lower = input.toLowerCase();
-  if (colorKeywords.html4.hasOwnProperty(lower)) {
-    input = colorKeywords.html4[lower];
-  }
-  return Luma.hex6(input);
-}
-
-// CSS 1
-// NOTE: named colors do not have specified RGB values (possibly platform dependent)
-// NOTE: the HTML4 color keywords are the same as the CSS1 keywords, except the CSS1 keywords don't have color values
-function parseCSS1Color(input: string): Luma.Color {
-  let lower = input.toLowerCase();
-  if (colorKeywords.html4.hasOwnProperty(lower)) {
-    return Luma.hex6(colorKeywords.html4[lower]);
-  }
-  return _parseSRgbMethods(input);
-}
-
-// CSS 2
-// NOTE: system colors are platform dependent and do not have specified RGB values
-function parseCSS2Color(input: string): Luma.Color {
-  if (colorKeywords.system.map(c => c.toLowerCase()).indexOf(input.toLowerCase()) !== -1) {
-    return null;
-  }
-  return parseCSS1Color(input);
-}
-
-// CSS 2.1
-function parseCSS2_1Color(input: string): Luma.Color {
-  if (input.toLowerCase() === 'orange') {
-    return Luma.hex6('#ffa500');
-  }
-  return parseCSS2Color(input);
-}
-
-
 namespace test {
   let legacyTests = [
     [null, ''], // 2
+    ['#000000', '   '], // 3
     ['#abc123', '  #abc123   '], // 3
     ['#ffffff', ' \t\n\f\r#ffffff'], // 3
     [null, 'transparent'], // 4
