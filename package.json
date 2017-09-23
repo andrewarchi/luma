@@ -1,0 +1,32 @@
+{
+  "name": "luma",
+  "version": "1.0.0",
+  "description": "Converts colors from many formats.",
+  "main": "luma.ts",
+  "dependencies": {
+    "tslint": "^5.7.0",
+    "typescript": "^2.5.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Andrew Archibald",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewarchi/luma.git"
+  },
+  "keywords": [
+    "color",
+    "rgb",
+    "hsl",
+    "hsv",
+    "typescript",
+    "javascript"
+  ],
+  "bugs": {
+    "url": "https://github.com/andrewarchi/luma/issues"
+  },
+  "homepage": "https://github.com/andrewarchi/luma#readme"
+}
