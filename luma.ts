@@ -1,10 +1,6 @@
 // Summary of the different standards
 // http://webcolors.readthedocs.io/en/1.5/colors.html
 
-// The only difference between these two sites seems to be in the inclusion of rebeccapurple
-// https://www.w3.org/TR/2011/WD-html5-20110525/common-microsyntaxes.html#rules-for-parsing-a-legacy-color-value
-// https://html.spec.whatwg.org/multipage/infrastructure.html#rules-for-parsing-a-legacy-colour-value
-
 namespace Luma {
   export class Color {
     public r: number;
@@ -20,7 +16,9 @@ namespace Luma {
     }
 
     toString(): string {
-      return this.toHexString();
+      if (this.a === 1) { return this.toHexString(); }
+      if (this.a === 0) { return 'transparent'; }
+      return this.toRgbaString();
     }
 
     toHexString(): string {
@@ -32,6 +30,15 @@ namespace Luma {
 
     toRgb(): RGB {
       return { r: this.r, g: this.g, b: this.b, a: this.a };
+    }
+
+    toRgbString(): string {
+      if (this.a !== 1) { return this.toRgbaString(); }
+      return `rgb(${this.r}, ${this.g}, ${this.b})`;
+    }
+
+    toRgbaString(): string {
+      return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
     }
   }
 
@@ -58,18 +65,18 @@ namespace Luma {
   }
 
   // Simple color
-  export function hex6(input: string): Color { // 1
+  export function hex6(input: string): Color {
     let matches = matchers.hex6.exec(input);
-    if (!matches) { // 2, 3, 4
-      return null; // error
+    if (!matches) {
+      return null;
     }
-    return new Color( // 5
-      parseInt(matches[1], 16), // 6
-      parseInt(matches[2], 16), // 7
-      parseInt(matches[3], 16) // 8
-    ); // 9
+    return new Color(
+      parseInt(matches[1], 16),
+      parseInt(matches[2], 16),
+      parseInt(matches[3], 16)
+    );
   }
-  
+
   export function hex3(input: string): Color {
     let matches = matchers.hex3.exec(input);
     if (!matches) {
@@ -82,11 +89,16 @@ namespace Luma {
     );
   }
 
-  export function rgb(r: number, g: number, b: number, a: number = 1): Color {
+  export function rgb(rgb: string): Color;
+  export function rgb(r: number, g: number, b: number, a?: number);
+  export function rgb(r: number | string, g?: number, b?: number, a: number = 1): Color {
+    if (typeof r === 'string') {
+      return _rgbString(r) || _rgbaString(r);
+    }
     return new Color(r, g, b, a);
   }
 
-  export function rgbString(input: string): Color {
+  function _rgbString(input: string): Color {
     let matches = matchers.rgb.exec(input);
     if (!matches) {
       return null;
@@ -98,7 +110,7 @@ namespace Luma {
     );
   }
 
-  export function rgbaString(input: string): Color {
+  function _rgbaString(input: string): Color {
     let matches = matchers.rgba.exec(input);
     if (!matches) {
       return null;
@@ -127,7 +139,7 @@ namespace Luma {
       return new Color(0, 0, 0, a);
     }
 
-    let m2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
+    let m2 = (l <= 0.5) ? l * (s + 1) : l + s - l * s;
     let m1 = l * 2 - m2;
 
     function hue(h) {
@@ -158,13 +170,14 @@ namespace Luma {
       s2 = 0;
     }
     else {
-      s2 /= l2 < 1 ? l2 : 2 - l2;
+      s2 /= (l2 < 1) ? l2 : 2 - l2;
     }
     l2 /= 2;
     
     return hsl(h, s2 * 100, l2 * 100, a);
   }
 
+  // https://www.w3.org/TR/2011/WD-html5-20110525/common-microsyntaxes.html#rules-for-parsing-a-legacy-color-value
   export function legacy(input: string): Color { // 1
     if (input === '') { // 2
       return null; // error
@@ -210,6 +223,14 @@ namespace Luma {
       parseInt(components[1], 16), // 18
       parseInt(components[2], 16) // 19
     ); // 20
+  
+    function _inferFormat(input: string): string {
+      if (matchers.hex3.test(input)) { return 'hex3'; }
+      if (matchers.hex6.test(input)) { return 'hex6'; }
+      let matches = matchers.func.exec(input);
+      if (matches) { return matches[1].toLowerCase(); }
+      return null;
+    }
   }
 
   namespace matchers {
@@ -454,7 +475,7 @@ function _parseSRgbMethods(input: string): Luma.Color {
   if (hex3 !== null) {
     return hex3;
   }
-  let rgb = Luma.rgbString(input);
+  let rgb = Luma.rgb(input);
   if (rgb !== null) {
     return rgb
   }
