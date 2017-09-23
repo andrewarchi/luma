@@ -5,6 +5,93 @@
 // https://www.w3.org/TR/2011/WD-html5-20110525/common-microsyntaxes.html#rules-for-parsing-a-legacy-color-value
 // https://html.spec.whatwg.org/multipage/infrastructure.html#rules-for-parsing-a-legacy-colour-value
 
+namespace luma {
+  export interface Color {
+    r, g, b, a: number;
+  }
+
+  function clamp(num: number, min: number, max: number): number {
+    return Math.min(Math.max(num, min), max);
+  }
+  function clamp01(num: number): number {
+    return clamp(num, 0, 1);
+  }
+  function clampFF(num: number): number {
+    return clamp(Math.round(num), 0, 255);
+  }
+
+  function bound01(num: number, max: number): number {
+    return clamp(num, 0, max) / max;
+  }
+
+  function mod(dividend: number, divisor: number): number {
+    return ((dividend % divisor) + divisor) % divisor;
+  }
+
+  export function rgb(r: number, g: number, b: number, a: number = 1): Color {
+    return {
+      r: clampFF(r),
+      g: clampFF(g),
+      b: clampFF(b),
+      a: clamp01(a)
+    };
+  }
+
+  // HSL to RGB
+  // https://www.w3.org/TR/2011/REC-css3-color-20110607/#hsl-color
+  //
+  // h: [0°, 360°)
+  // s: [0%, 100%]
+  // l: [0%, 100%]
+  // a: [0, 1]
+  export function hsl(h: number, s: number, l: number, a: number = 1): Color {
+    h = mod(h, 360) / 360;
+    s = bound01(s, 100);
+    l = bound01(l, 100);
+
+    if (s === 0) {
+      return { r: 0, g: 0, b: 0, a: a };
+    }
+
+    let m2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
+    let m1 = l * 2 - m2;
+
+    function hue(h) {
+      if (h < 0) { h++; }
+      if (h > 1) { h--; }
+      if (h * 6 < 1) { return m1 + (m2 - m1) * h * 6; }
+      if (h * 2 < 1) { return m2; }
+      if (h * 3 < 2) { return m1 + (m2 - m1) * (2/3 - h) * 6; }
+      return m1;
+    }
+
+    return rgb(
+      255 * hue(h + 1/3),
+      255 * hue(h),
+      255 * hue(h - 1/3),
+      a);
+  }
+
+  // https://gist.github.com/voxpelli/1069204
+  export function hsv(h: number, s: number, v: number, a: number = 1): Color {
+    s = bound01(s, 100);
+    v = bound01(s, 100);
+  
+    let s2 = s * v;
+    let l2 = (2 - s) * v;
+
+    if (l2 === 2) {
+      s2 = 0;
+    }
+    else {
+      s2 /= l2 < 1 ? l2 : 2 - l2;
+    }
+    l2 /= 2;
+  
+    return hsl(h, s2 * 100, l2 * 100, a);
+  }
+}
+
 interface SimpleColor {
   r, g, b: number;
 }
