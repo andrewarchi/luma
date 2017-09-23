@@ -5,7 +5,7 @@
 // https://www.w3.org/TR/2011/WD-html5-20110525/common-microsyntaxes.html#rules-for-parsing-a-legacy-color-value
 // https://html.spec.whatwg.org/multipage/infrastructure.html#rules-for-parsing-a-legacy-colour-value
 
-namespace luma {
+namespace Luma {
   export class Color {
     public r: number;
     public g: number;
@@ -63,7 +63,7 @@ namespace luma {
     if (!matches) { // 2, 3, 4
       return null; // error
     }
-    return new luma.Color( // 5
+    return new Color( // 5
       parseInt(matches[1], 16), // 6
       parseInt(matches[2], 16), // 7
       parseInt(matches[3], 16) // 8
@@ -75,7 +75,7 @@ namespace luma {
     if (!matches) {
       return null;
     }
-    return new luma.Color(
+    return new Color(
       17 * parseInt(matches[1], 16),
       17 * parseInt(matches[2], 16),
       17 * parseInt(matches[3], 16)
@@ -83,7 +83,32 @@ namespace luma {
   }
 
   export function rgb(r: number, g: number, b: number, a: number = 1): Color {
-    return new luma.Color(r, g, b, a);
+    return new Color(r, g, b, a);
+  }
+
+  export function rgbString(input: string): Color {
+    let matches = matchers.rgb.exec(input);
+    if (!matches) {
+      return null;
+    }
+    return new Color(
+      Math.floor(_cssNumber(matches[1], 0, 255)),
+      Math.floor(_cssNumber(matches[2], 0, 255)),
+      Math.floor(_cssNumber(matches[3], 0, 255))
+    );
+  }
+
+  export function rgbaString(input: string): Color {
+    let matches = matchers.rgba.exec(input);
+    if (!matches) {
+      return null;
+    }
+    return new Color(
+      Math.floor(_cssNumber(matches[1], 0, 255)),
+      Math.floor(_cssNumber(matches[2], 0, 255)),
+      Math.floor(_cssNumber(matches[3], 0, 255)),
+      _cssNumber(matches[4], 0, 1)
+    );
   }
 
   // HSL to RGB
@@ -99,7 +124,7 @@ namespace luma {
     l = bound01(l, 100);
 
     if (s === 0) {
-      return new luma.Color(0, 0, 0, a);
+      return new Color(0, 0, 0, a);
     }
 
     let m2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
@@ -120,15 +145,15 @@ namespace luma {
       255 * hue(h - 1/3),
       a);
   }
-
+  
   // https://gist.github.com/voxpelli/1069204
   export function hsv(h: number, s: number, v: number, a: number = 1): Color {
     s = bound01(s, 100);
     v = bound01(s, 100);
-
+    
     let s2 = s * v;
     let l2 = (2 - s) * v;
-
+    
     if (l2 === 2) {
       s2 = 0;
     }
@@ -136,26 +161,73 @@ namespace luma {
       s2 /= l2 < 1 ? l2 : 2 - l2;
     }
     l2 /= 2;
-
+    
     return hsl(h, s2 * 100, l2 * 100, a);
   }
-}
 
-// FIXME: has percentages, but should fix that
-// FIXME: incomplete
-// NOTE: doesn't handle capitalization of rgb, hsl, etc. keywords
-namespace matchers {
-  let cssInteger = `[-\\+]?\\d+`; // http://www.w3.org/TR/css3-values/#integers
-  let cssNumber = `[-\\+]?\\d*\\.\\d+(?:[eE]${cssInteger})?`; // http://www.w3.org/TR/css3-values/#number-value
-  let cssUnit = `(?:${cssInteger})|(?:${cssNumber})%?`;
-  let group3 = `\\(\\s*(${cssUnit})\\s*,\\s*(${cssUnit})\\s*,\\s*(${cssUnit})\\s*\\)`;
-  let group4 = `\\(\\s*(${cssUnit})\\s*,\\s*(${cssUnit})\\s*,\\s*(${cssUnit})\\s*\\,\\s*(${cssUnit})\\s*\\)`;
-  export var hex3 = /^#([\dA-F])([\dA-F])([\dA-F])$/i;
-  export var hex6 = /^#([\dA-F]{2})([\dA-F]{2})([\dA-F]{2})$/i;
-  export var rgb = new RegExp('rgb' + group3);
-  export var rgba = new RegExp('rgba' + group4);
-  export var hsl = new RegExp('hsl' + group3);
-  export var hsla = new RegExp('hsla' + group4);
+  export function legacy(input: string): Color { // 1
+    if (input === '') { // 2
+      return null; // error
+    }
+    input = input.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, ''); // 3
+    let lower = input.toLowerCase();
+    if (lower === 'transparent') { // 4
+      return null; // error
+    }
+    if (colorKeywords.svg.hasOwnProperty(lower)) { // 5
+      return Luma.hex6(colorKeywords.svg[lower]);
+    }
+    let hex3 = Luma.hex3(input); // 6
+    if (hex3 !== null) {
+      return hex3;
+    }
+    input = input.replace(/[^\x00-\uFFFF]/g, '00'); // 7
+    input = input.slice(0, 128); // 8
+    if (input.charAt(0) === '#') { // 9
+      input = input.slice(1);
+    }
+    input = input.replace(/[^\dA-F]/gi, '0'); // 10
+    while (input.length === 0 || input.length % 3 !== 0) { // 11
+      input += '0';
+    }
+    let length = input.length / 3; // 12
+    let components = input.match(new RegExp('.{' + length + '}', 'g'));
+    if (length > 8) { // 13
+      components = components.map(c => c.slice(-8));
+      length = 8;
+    }
+    while (length > 2 && components.every(c => c.charAt(0) === '0')) { // 14
+      components = components.map(c => c.slice(1));
+      length--;
+    }
+    if (length > 2) { // 15
+      components = components.map(c => c.slice(0, 2));
+    }
+    // NOTE: if this is modified to output a hexadecimal string, leading
+    // zeros need to be prepended when components have only one character.
+    return new Color( // 16
+      parseInt(components[0], 16), // 17
+      parseInt(components[1], 16), // 18
+      parseInt(components[2], 16) // 19
+    ); // 20
+  }
+
+  namespace matchers {
+    let cssInteger = `[-\\+]?\\d+`; // http://www.w3.org/TR/css3-values/#integers
+    let cssNumber = `[-\\+]?\\d*\\.\\d+(?:[eE]${cssInteger})?`; // http://www.w3.org/TR/css3-values/#number-value
+    let cssUnit = `(?:${cssInteger})|(?:${cssNumber})%?`;
+    let spacedUnit = `\\s*(${cssUnit})\\s*`;
+    let group3 = `\\(${spacedUnit},${spacedUnit},${spacedUnit}\\)`;
+    let group4 = `\\(${spacedUnit},${spacedUnit},${spacedUnit},${spacedUnit}\\)`;
+    let genericFunc = `([a-z]+)\\((?:${spacedUnit},)*${spacedUnit}\\)`;
+    export var hex3 = /^#([\dA-F])([\dA-F])([\dA-F])$/i;
+    export var hex6 = /^#([\dA-F]{2})([\dA-F]{2})([\dA-F]{2})$/i;
+    export var rgb = new RegExp('rgb' + group3, 'i');
+    export var rgba = new RegExp('rgba' + group4, 'i');
+    export var hsl = new RegExp('hsl' + group3, 'i');
+    export var hsla = new RegExp('hsla' + group4, 'i');
+    export var func = new RegExp(genericFunc, 'i');
+  }
 }
 
 namespace colorKeywords {
@@ -329,31 +401,7 @@ namespace colorKeywords {
     yellow:  '#ffff00'
   };
 
-  export var css1 = [
-    'aqua', 'black', 'blue', 'fuchsia',
-    'gray', 'green', 'lime', 'maroon',
-    'navy', 'olive', 'purple', 'red',
-    'silver', 'teal', 'white', 'yellow'
-  ];
-
-  export var css2 = {
-    aqua:    '#00ffff',
-    black:   '#000000',
-    blue:    '#0000ff',
-    fuchsia: '#ff00ff',
-    gray:    '#808080',
-    green:   '#008000',
-    lime:    '#00ff00',
-    maroon:  '#800000',
-    navy:    '#000080',
-    olive:   '#808000',
-    purple:  '#800080',
-    red:     '#ff0000',
-    silver:  '#c0c0c0',
-    teal:    '#008080',
-    white:   '#ffffff',
-    yellow:  '#ffff00'
-  };
+  // export var css2_1 = Object.assign({ orange: '#ffa500' }, html4);
 
   export var system = [
     'ActiveBorder',
@@ -387,80 +435,6 @@ namespace colorKeywords {
   ];
 }
 
-namespace parsers {
-  export function legacy(input: string): luma.Color { // 1
-    if (input === '') { // 2
-      return null; // error
-    }
-    input = input.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, ''); // 3
-    let lower = input.toLowerCase();
-    if (lower === 'transparent') { // 4
-      return null; // error
-    }
-    if (colorKeywords.svg.hasOwnProperty(lower)) { // 5
-      return luma.hex6(colorKeywords.svg[lower]);
-    }
-    let hex3 = luma.hex3(input); // 6
-    if (hex3 !== null) {
-      return hex3;
-    }
-    input = input.replace(/[^\x00-\uFFFF]/g, '00'); // 7
-    input = input.slice(0, 128); // 8
-    if (input.charAt(0) === '#') { // 9
-      input = input.slice(1);
-    }
-    input = input.replace(/[^\dA-F]/gi, '0'); // 10
-    while (input.length === 0 || input.length % 3 !== 0) { // 11
-      input += '0';
-    }
-    let length = input.length / 3; // 12
-    let components = input.match(new RegExp('.{' + length + '}', 'g'));
-    if (length > 8) { // 13
-      components = components.map(c => c.slice(-8));
-      length = 8;
-    }
-    while (length > 2 && components.every(c => c.charAt(0) === '0')) { // 14
-      components = components.map(c => c.slice(1));
-      length--;
-    }
-    if (length > 2) { // 15
-      components = components.map(c => c.slice(0, 2));
-    }
-    // NOTE: if this is modified to output a hexadecimal string, leading
-    // zeros need to be prepended when components have only one character.
-    return new luma.Color( // 16
-      parseInt(components[0], 16), // 17
-      parseInt(components[1], 16), // 18
-      parseInt(components[2], 16) // 19
-    ); // 20
-  }
-
-  export function rgb(input: string): luma.Color {
-    let matches = matchers.rgb.exec(input);
-    if (!matches) {
-      return null;
-    }
-    return new luma.Color(
-      Math.floor(_cssNumber(matches[1], 0, 255)),
-      Math.floor(_cssNumber(matches[2], 0, 255)),
-      Math.floor(_cssNumber(matches[3], 0, 255))
-    );
-  }
-
-  export function rgba(input: string): luma.Color {
-    let matches = matchers.rgba.exec(input);
-    if (!matches) {
-      return null;
-    }
-    return new luma.Color(
-      Math.floor(_cssNumber(matches[1], 0, 255)),
-      Math.floor(_cssNumber(matches[2], 0, 255)),
-      Math.floor(_cssNumber(matches[3], 0, 255)),
-      _cssNumber(matches[4], 0, 1)
-    );
-  }
-}
-
 // Handles percentages, exponents, and clamps number to range
 function _cssNumber(input: string, min: number, max: number): number {
   if (input.slice(-1) === '%') {
@@ -471,16 +445,16 @@ function _cssNumber(input: string, min: number, max: number): number {
 }
 
 
-function _parseSRgbMethods(input: string): luma.Color {
-  let hex6 = luma.hex6(input);
+function _parseSRgbMethods(input: string): Luma.Color {
+  let hex6 = Luma.hex6(input);
   if (hex6 !== null) {
     return hex6;
   }
-  let hex3 = luma.hex3(input);
+  let hex3 = Luma.hex3(input);
   if (hex3 !== null) {
     return hex3;
   }
-  let rgb = parsers.rgb(input);
+  let rgb = Luma.rgbString(input);
   if (rgb !== null) {
     return rgb
   }
@@ -489,45 +463,40 @@ function _parseSRgbMethods(input: string): luma.Color {
 
 // HTML4
 // https://www.w3.org/TR/html401/types.html#h-6.5
-function html4(input: string): luma.Color {
+function html4(input: string): Luma.Color {
   var lower = input.toLowerCase();
   if (colorKeywords.html4.hasOwnProperty(lower)) {
     input = colorKeywords.html4[lower];
   }
-  return luma.hex6(input);
+  return Luma.hex6(input);
 }
 
 // CSS 1
-function parseCSS1Color(input: string): luma.Color {
-  if (colorKeywords.css1.indexOf(input.toLowerCase()) !== -1) {
-    return null; // Named colors do not have specified RGB values (probably platform dependent)
+// NOTE: named colors do not have specified RGB values (possibly platform dependent)
+// NOTE: the HTML4 color keywords are the same as the CSS1 keywords, except the CSS1 keywords don't have color values
+function parseCSS1Color(input: string): Luma.Color {
+  let lower = input.toLowerCase();
+  if (colorKeywords.html4.hasOwnProperty(lower)) {
+    return Luma.hex6(colorKeywords.html4[lower]);
   }
   return _parseSRgbMethods(input);
 }
 
 // CSS 2
-function parseCSS2Color(input: string): luma.Color {
-  let lower = input.toLowerCase();
-  if (colorKeywords.css2.hasOwnProperty(lower)) {
-    return luma.hex6(colorKeywords.css2[lower]);
+// NOTE: system colors are platform dependent and do not have specified RGB values
+function parseCSS2Color(input: string): Luma.Color {
+  if (colorKeywords.system.map(c => c.toLowerCase()).indexOf(input.toLowerCase()) !== -1) {
+    return null;
   }
-  if (colorKeywords.system.indexOf(lower) !== -1) {
-    return null; // System colors are platform dependent and do not have specified RGB values
-  }
-  return _parseSRgbMethods(input);
+  return parseCSS1Color(input);
 }
 
 // CSS 2.1
-function parseCSS2_1Color(input: string): luma.Color {
+function parseCSS2_1Color(input: string): Luma.Color {
   if (input.toLowerCase() === 'orange') {
-    return luma.hex6('#ffa500');
+    return Luma.hex6('#ffa500');
   }
   return parseCSS2Color(input);
-}
-
-// CSS 3
-function parseCSS3Color(input: string): luma.Color {
-  return;
 }
 
 
@@ -564,7 +533,7 @@ namespace test {
   ];
 
   function testCompare(input, expected) {
-    let parsed = parsers.legacy(input);
+    let parsed = Luma.legacy(input);
     let hex = null;
     let rgb = null;
     if (parsed !== null) {
