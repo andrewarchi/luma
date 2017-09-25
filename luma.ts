@@ -203,8 +203,8 @@ namespace Luma {
     if (lower === 'transparent') { // 4
       return null; // error
     }
-    if (colorKeywords.svg.hasOwnProperty(lower)) { // 5
-      return hex6(colorKeywords.svg[lower]);
+    if (colorKeywords.css3.hasOwnProperty(lower)) { // 5
+      return hex6(colorKeywords.css3[lower]);
     }
     let hex = hex3(input); // 6
     if (hex !== null) {
@@ -245,8 +245,8 @@ namespace Luma {
   // hex6, Windows VGA palette
   export function html4(input: string): Color {
     let lower = input.toLowerCase();
-    if (colorKeywords.html.hasOwnProperty(lower)) {
-      input = colorKeywords.html[lower];
+    if (colorKeywords.html4.hasOwnProperty(lower)) {
+      input = colorKeywords.html4[lower];
     }
     return hex6(input);
   }
@@ -255,8 +255,8 @@ namespace Luma {
   // hex3, hex6, rgb, rgb%, Windows VGA palette
   export function css1(input: string): Color {
     let lower = input.toLowerCase();
-    if (colorKeywords.html.hasOwnProperty(lower)) {
-      input = colorKeywords.html[lower];
+    if (colorKeywords.html4.hasOwnProperty(lower)) {
+      input = colorKeywords.html4[lower];
     }
     return hex6(input) || hex3(input);
       //|| rgb(input); // NOTE: this includes rgba, but shouldn't
@@ -284,7 +284,7 @@ namespace Luma {
 
   // Checks if string is a CSS 2 system color
   export function isSystem(input: string): boolean {
-    return colorKeywords.system.indexOf(input.toLowerCase()) !== -1;
+    return colorKeywords.css2System.indexOf(input.toLowerCase()) !== -1;
   }
 
   // CSS 3
@@ -350,7 +350,7 @@ namespace Luma {
 }
 
 namespace colorKeywords {
-  export const svg = {
+  export const css3 = {
     aliceblue: '#f0f8ff',
     antiquewhite: '#faebd7',
     aqua: '#00ffff',
@@ -504,7 +504,7 @@ namespace colorKeywords {
   // Windows VGA palette
   // HTML 3.2-4.01
   // CSS 1
-  export const html = {
+  export const html4 = {
     aqua:    '#00ffff',
     black:   '#000000',
     blue:    '#0000ff',
@@ -523,9 +523,11 @@ namespace colorKeywords {
     yellow:  '#ffff00'
   };
 
-  // export const css2_1 = Object.assign({ orange: '#ffa500' }, html4);
+  export const css21 = Object.assign({
+    orange: '#ffa500'
+  }, html4);
 
-  export const system = [
+  export const css2System = [
     'ActiveBorder',
     'ActiveCaption',
     'AppWorkspace',
