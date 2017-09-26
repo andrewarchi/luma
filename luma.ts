@@ -5,17 +5,21 @@
  * CSS 1      https://www.w3.org/TR/2008/REC-CSS1-20080411/#color-units
  * CSS 2.2    https://www.w3.org/TR/2016/WD-CSS22-20160412/syndata.html#color-units
  * CSS 3      https://www.w3.org/TR/2011/REC-css3-color-20110607/
+ *
+ * Summary of the different standards:
+ * http://webcolors.readthedocs.io/en/1.5/colors.html
  */
 
-// Summary of the different standards
-// http://webcolors.readthedocs.io/en/1.5/colors.html
+function Luma(input: string): Luma.Color {
+  return Luma.parse(input);
+}
 
 namespace Luma {
   export class Color {
-    public r: number;
-    public g: number;
-    public b: number;
-    public a: number;
+    private r: number;
+    private g: number;
+    private b: number;
+    private a: number;
 
     constructor(r: number, g: number, b: number, a: number = 1) {
       this.r = clampFF(r);
@@ -28,6 +32,14 @@ namespace Luma {
       if (this.a === 1) { return this.toHexString(); }
       if (this.a === 0) { return 'transparent'; }
       return this.toRgbaString();
+    }
+
+    equals(color: Color): boolean {
+      return this.r === color.r && this.g === color.g && this.b === color.b && this.a === color.a;
+    }
+
+    clone(): Color {
+      return new Color(this.r, this.g, this.b, this.a);
     }
 
     // Ignores alpha channel
@@ -607,7 +619,7 @@ namespace test {
     let rgb = null;
     if (parsed !== null) {
       hex = parsed.toHexString(false);
-      rgb = 'rgb(' + parsed.r + ', ' + parsed.g + ', ' + parsed.b + ')';
+      rgb = parsed.toRgbString();
     }
 
     document.body.setAttribute('bgcolor', input);
